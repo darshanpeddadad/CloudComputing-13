@@ -1,0 +1,52 @@
+services:
+  backend:
+    build:
+      context: .
+    container_name: fulda-backend-dev
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-mysql+asyncmy://${DATABASE_USER:-fulda_user}:${DATABASE_PASSWORD:-fulda_pass}@${DATABASE_HOST:-mysql}:${DATABASE_PORT:-3306}/${DATABASE_NAME:-fulda_app}}"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+    networks:
+      - backend-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: fulda-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DATABASE_PASSWORD:-fulda_pass}"
+      MYSQL_DATABASE: "${DATABASE_NAME:-fulda_app}"
+      MYSQL_USER: "${DATABASE_USER:-fulda_user}"
+      MYSQL_PASSWORD: "${DATABASE_PASSWORD:-fulda_pass}"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - backend-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: fulda-backend-nginx-dev
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - backend-net
+
+volumes:
+  mysql_data:
+
+networks:
+  backend-net:
+    driver: bridge

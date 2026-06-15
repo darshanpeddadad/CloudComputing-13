@@ -1,0 +1,83 @@
+name: Production Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # 1. Get the latest code
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. Configure SSH Key
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
+
+      # 3. Connect and Deploy
+      - name: Deploy to EC2
+        env:
+          EC2_USER: ubuntu
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          PROJECT_DIR: /home/ubuntu/Fulda-Fall-2025-Team2
+          # Database & Backend configuration secrets
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          # AWS S3 Secrets
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+            set -e
+
+            echo "🚀 Starting Deployment to fuldanexus.app..."
+            
+            # Create project directory if it doesn't exist (first run setup)
+            if [ ! -d "$PROJECT_DIR" ]; then
+              echo "Creating project directory..."
+              git clone https://github.com/${{ github.repository }}.git "$PROJECT_DIR"
+            fi
+            
+            cd "$PROJECT_DIR"
+
+            echo "⬇️ Pulling latest code..."
+            git fetch --all
+            git checkout main
+            git reset --hard origin/main
+
+            echo "🔑 Creating Backend/.env configuration file..."
+            cat << 'INNER_EOF' > Backend/.env
+          DATABASE_URL=$DATABASE_URL
+          SECRET_KEY=$SECRET_KEY
+          ADMIN_EMAIL=$ADMIN_EMAIL
+          ADMIN_PASSWORD=$ADMIN_PASSWORD
+          AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+          AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+          AWS_REGION=$AWS_REGION
+          S3_BUCKET_NAME=$S3_BUCKET_NAME
+          ENVIRONMENT=production
+          SKIP_DB_WAIT=true
+          INNER_EOF
+
+            echo "🧹 Cleaning up to save disk space..."
+            sudo docker system prune -af
+
+            echo "🏗️ Rebuilding Nginx (Frontend) and Backend..."
+            sudo docker compose up --build -d
+
+            echo "🔄 Syncing Chroma Events..."
+            sudo docker exec -e PYTHONPATH=/app fastapi-backend python scripts/sync_chroma_events.py
+
+            echo "✅ Deployment Finished successfully!"
+          EOF

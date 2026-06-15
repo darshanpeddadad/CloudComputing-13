@@ -1,0 +1,3 @@
+name: fuldanexus-infra
+runtime: python
+description: AWS Infrastructure for Fulda Nexus App (React + FastAPI + RDS MySQL)
