@@ -1,0 +1,7 @@
+encryptionsalt: v1:FdtjfbMXW2s=:v1:yDmXumDU42GkEDa1:3gGHzzhymKdyiKpjiGLHh9cNWN8peA==
+config:
+  fuldanexus-infra:db_username: fulda_user
+  fuldanexus-infra:db_name: fulda_app
+  fuldanexus-infra:db_password:
+    secure: v1:43V4i/Y4qkzRnky9:XwzAViU9sSjQlQqCwHUx2udZsUo0Waf/lA==
+  fuldanexus-infra:key_name: fulda-key-new

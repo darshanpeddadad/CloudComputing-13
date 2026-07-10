@@ -61,3 +61,15 @@ build/
 .cache/
 test.db
 Backend/test.db
+
+# Cloud computing deployment ignores (keep local, ignore on Git)
+Backend/
+frontend/
+Milestones/
+nginx/
+docker-compose.yml
+COMPLETE_OPENSTACK_DEPLOYMENT_GUIDE.md
+PULUMI_DEPLOYMENT_MANUAL.md
+*.pem
+
+
