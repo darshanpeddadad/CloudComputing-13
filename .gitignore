@@ -63,7 +63,7 @@ test.db
 Backend/test.db
 
 # Cloud computing deployment ignores (keep local, ignore on Git)
-Backend/
+#Backend/
 frontend/
 Milestones/
 nginx/

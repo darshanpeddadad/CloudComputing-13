@@ -146,17 +146,25 @@ echo "✅ Database bootstrapping completed!"
 """
 )
 
+# Create explicit port for DB Server
+db_port = openstack.networking.Port(
+    "db-server-port",
+    name="fulda-db-server-port",
+    network_id=network.id,
+    security_group_ids=[secgroup_db.id],
+    opts=pulumi.ResourceOptions(depends_on=[subnet])
+)
+
 db_instance = openstack.compute.Instance(
     "db-server",
     name="fulda-db-server",
     flavor_name=flavor_name,
     image_name=image_name,
     key_pair=key_name,
-    security_groups=[secgroup_db.name],
-    networks=[{"uuid": network.id}],
+    networks=[{"port": db_port.id}],
     user_data=db_user_data,
     tags=["fulda-app"],
-    opts=pulumi.ResourceOptions(depends_on=[subnet, router_interface])
+    opts=pulumi.ResourceOptions(depends_on=[router_interface])
 )
 
 # 6. Compute Provisioning: Scalable Web Server VM(s)
@@ -233,7 +241,8 @@ floating_ip = openstack.networking.FloatingIp(
 fip_association = openstack.networking.FloatingIpAssociate(
     "web-server-fip-assoc",
     floating_ip=floating_ip.address,
-    port_id=web_ports[0].id
+    port_id=web_ports[0].id,
+    opts=pulumi.ResourceOptions(depends_on=[router_interface, web_instances[0]])
 )
 
 # 8. Stack Exports
@@ -242,7 +251,7 @@ pulumi.export("Subnet_ID", subnet.id)
 pulumi.export("Router_ID", router.id)
 pulumi.export(
     "DB_Private_IP",
-    db_instance.networks.apply(lambda nets: nets[0]["fixed_ip_v4"] if nets else None)
+    db_port.all_fixed_ips.apply(lambda ips: ips[0] if ips else None)
 )
 pulumi.export("Web_Primary_Public_IP", floating_ip.address)
 pulumi.export(
