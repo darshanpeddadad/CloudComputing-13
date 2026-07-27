@@ -72,6 +72,9 @@ if ($Action -eq "vm-setup") {
 # FULL DEPLOY (default: pulumi up + VM setup)
 # ════════════════════════════════════════════════════════════
 if ($Action -eq "up") {
+    Write-Host ">>> Ensuring Pulumi config secrets are set..." -ForegroundColor Cyan
+    pulumi config set --secret fuldanexus-infra:db_password "Hulk@3000" 2>$null
+
     Write-Host ""
     Write-Host ">>> Running: pulumi up --yes" -ForegroundColor Green
     pulumi up --yes
