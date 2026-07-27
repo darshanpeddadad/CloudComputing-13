@@ -17,5 +17,5 @@ $env:OS_PROJECT_DOMAIN_NAME   = "Default"
 $env:OS_IDENTITY_API_VERSION  = "3"
 $env:OS_INSECURE              = "true"
 
-Write-Host "✅ Environment variables set!" -ForegroundColor Green
-Write-Host "You can now run: pulumi up / pulumi destroy / pulumi stack output" -ForegroundColor Cyan
+Write-Host "Environment variables set!" 
+Write-Host "You can now run: pulumi up / pulumi destroy / pulumi stack output"
