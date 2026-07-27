@@ -20,7 +20,7 @@ $DB_NAME     = "fulda_app"
 # ── Helper: run a command on the VM via SSH ──────────────────
 function SSH-Run {
     param([string]$IP, [string]$Command)
-    ssh -i $KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@$IP $Command
+    ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 ubuntu@$IP $Command
 }
 
 # ── Load env vars ────────────────────────────────────────────
@@ -74,6 +74,7 @@ if ($Action -eq "vm-setup") {
 if ($Action -eq "up") {
     Write-Host ">>> Ensuring Pulumi config secrets are set..." -ForegroundColor Cyan
     pulumi config set --secret fuldanexus-infra:db_password "Hulk@3000" 2>$null
+    pulumi config set fuldanexus-infra:key_name "fulda-key-new" 2>$null
 
     Write-Host ""
     Write-Host ">>> Running: pulumi up --yes" -ForegroundColor Green
@@ -133,6 +134,25 @@ SSH-Run $WEB_IP "if [ ! -d ~/app ]; then git clone $GITHUB_REPO app; fi"
 Write-Host ">>> Writing .env file on VM..." -ForegroundColor Cyan
 $envCmd = "cat > ~/app/Backend/.env << 'ENVEOF'" + "`n" + $ENV_CONTENT + "`nENVEOF"
 SSH-Run $WEB_IP $envCmd
+
+# Wait for Docker to be installed by cloud-init
+Write-Host ">>> Waiting for Docker to be installed by cloud-init..." -ForegroundColor Cyan
+$dockerReady = $false
+for ($d = 1; $d -le 12; $d++) {
+    $dockerCheck = SSH-Run $WEB_IP "which docker 2>/dev/null"
+    if ($dockerCheck -match "docker") {
+        $dockerReady = $true
+        Write-Host "    Docker is ready!" -ForegroundColor Green
+        break
+    }
+    Write-Host "    Docker not ready yet, waiting 60s (attempt $d/12)..." -ForegroundColor DarkGray
+    Start-Sleep -Seconds 60
+}
+
+if (-not $dockerReady) {
+    Write-Host "ERROR: Docker never became available. Check cloud-init logs on VM." -ForegroundColor Red
+    exit 1
+}
 
 # Start Docker Compose
 Write-Host ">>> Starting Docker Compose (this takes ~3 min to build)..." -ForegroundColor Cyan
