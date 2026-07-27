@@ -170,35 +170,34 @@ db_instance = openstack.compute.Instance(
 # 6. Compute Provisioning: Scalable Web Server VM(s)
 # User data script to configure swap space, install docker, compose, git
 web_user_data = """#!/bin/bash
-# 1. Update system packages
+# 1. Update package lists only (skip upgrade — saves 5-10 min)
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get upgrade -y
 
-# 2. Allocate 2GB Swap space (helps compilation of React frontend without OOM crashes)
+# 2. Allocate 2GB Swap space (helps React frontend build without OOM crashes)
 fallocate -l 2G /swapfile
 chmod 600 /swapfile
 mkswap /swapfile
 swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
-# 3. Install Docker
+# 3. Install Docker (official repo) + git
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common git
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update -y
-apt-get install -y docker-ce docker-ce-cli containerd.io
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-# 4. Install Docker Compose
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
-
-# 5. Enable Docker on boot and add ubuntu to docker group
+# 4. Enable Docker on boot and add ubuntu to docker group
 systemctl enable docker
 systemctl start docker
 usermod -aG docker ubuntu
 
-echo "✅ Web bootstrapping completed!"
+# 5. Clone the app repo so it is ready when deploy.ps1 connects
+git clone https://github.com/darshanpeddadad/CloudComputing-13.git /home/ubuntu/app
+chown -R ubuntu:ubuntu /home/ubuntu/app
+
+echo "✅ Web bootstrapping completed!" >> /var/log/cloud-init-fulda.log
 """
 
 # Get instance count (defaults to 1, but satisfies rapid elasticity requirement!)

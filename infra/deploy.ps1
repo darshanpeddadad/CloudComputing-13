@@ -123,62 +123,49 @@ ADMIN_DOB=1990-01-01
 "@
 
 Write-Host ""
-Write-Host ">>> Waiting 30s for VM to finish booting..." -ForegroundColor Yellow
-Start-Sleep -Seconds 30
+Write-Host ">>> Waiting for VM cloud-init to finish (Docker + git clone)..." -ForegroundColor Yellow
+$dockerReady = $false
+for ($d = 1; $d -le 15; $d++) {
+    $check = SSH-Run $WEB_IP "test -f /home/ubuntu/app/docker-compose.yml && which docker && echo READY 2>/dev/null"
+    if ($check -match "READY") {
+        $dockerReady = $true
+        Write-Host "    VM is ready! (took ~$d min)" -ForegroundColor Green
+        break
+    }
+    Write-Host "    VM still setting up... ($d/15 min)" -ForegroundColor DarkGray
+    Start-Sleep -Seconds 60
+}
 
-# Clone repo (if not already cloned)
-Write-Host ">>> Cloning repo on VM..." -ForegroundColor Cyan
-SSH-Run $WEB_IP "if [ ! -d ~/app ]; then git clone $GITHUB_REPO app; fi"
+if (-not $dockerReady) {
+    Write-Host "ERROR: VM setup timed out. SSH in and check: sudo cat /var/log/cloud-init-output.log" -ForegroundColor Red
+    exit 1
+}
 
 # Write .env file via SSH heredoc
 Write-Host ">>> Writing .env file on VM..." -ForegroundColor Cyan
 $envCmd = "cat > ~/app/Backend/.env << 'ENVEOF'" + "`n" + $ENV_CONTENT + "`nENVEOF"
 SSH-Run $WEB_IP $envCmd
 
-# Wait for Docker to be installed by cloud-init
-Write-Host ">>> Waiting for Docker to be installed by cloud-init..." -ForegroundColor Cyan
-$dockerReady = $false
-for ($d = 1; $d -le 12; $d++) {
-    $dockerCheck = SSH-Run $WEB_IP "which docker 2>/dev/null"
-    if ($dockerCheck -match "docker") {
-        $dockerReady = $true
-        Write-Host "    Docker is ready!" -ForegroundColor Green
-        break
-    }
-    Write-Host "    Docker not ready yet, waiting 60s (attempt $d/12)..." -ForegroundColor DarkGray
-    Start-Sleep -Seconds 60
-}
-
-if (-not $dockerReady) {
-    Write-Host "ERROR: Docker never became available. Check cloud-init logs on VM." -ForegroundColor Red
-    exit 1
-}
-
 # Start Docker Compose
-Write-Host ">>> Starting Docker Compose (this takes ~3 min to build)..." -ForegroundColor Cyan
+Write-Host ">>> Starting Docker Compose (build + start containers)..." -ForegroundColor Cyan
 SSH-Run $WEB_IP "cd ~/app && sudo docker compose up --build -d"
 
-# Wait for DB
+# Poll for DB connectivity (no fixed wait — check every 30s, up to 15 min)
 Write-Host ""
-Write-Host ">>> Waiting 8 minutes for DB to fully start..." -ForegroundColor Yellow
-Write-Host "    (MySQL cloud-init install takes time on fresh VMs)" -ForegroundColor DarkGray
-for ($i = 8; $i -gt 0; $i--) {
-    Write-Host "    $i minutes remaining..." -ForegroundColor DarkGray
-    Start-Sleep -Seconds 60
-}
+Write-Host ">>> Waiting for MySQL DB to be ready..." -ForegroundColor Yellow
 
 # Try DB connectivity
 Write-Host ">>> Checking DB connectivity..." -ForegroundColor Cyan
 $dbReady = $false
-for ($attempt = 1; $attempt -le 5; $attempt++) {
+for ($attempt = 1; $attempt -le 20; $attempt++) {
     $result = SSH-Run $WEB_IP "nc -zv $DB_IP 3306 2>&1"
     if ($result -match "succeeded") {
         $dbReady = $true
-        Write-Host "    DB is reachable!" -ForegroundColor Green
+        Write-Host "    DB is reachable! (attempt $attempt)" -ForegroundColor Green
         break
     }
-    Write-Host "    DB not ready yet, waiting 60s (attempt $attempt/5)..." -ForegroundColor Yellow
-    Start-Sleep -Seconds 60
+    Write-Host "    DB not ready yet... ($attempt/20, waiting 30s)" -ForegroundColor DarkGray
+    Start-Sleep -Seconds 30
 }
 
 if (-not $dbReady) {
