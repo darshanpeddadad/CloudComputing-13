@@ -133,7 +133,7 @@ SSH-Run $WEB_IP $envCmd
 
 # Start Docker Compose
 Write-Host ">>> Starting Docker Compose (this takes ~3 min to build)..." -ForegroundColor Cyan
-SSH-Run $WEB_IP "cd ~/app && sudo docker-compose up --build -d"
+SSH-Run $WEB_IP "cd ~/app && sudo docker compose up --build -d"
 
 # Wait for DB
 Write-Host ""
