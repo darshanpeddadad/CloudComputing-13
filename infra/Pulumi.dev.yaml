@@ -3,5 +3,5 @@ config:
   fuldanexus-infra:db_username: fulda_user
   fuldanexus-infra:db_name: fulda_app
   fuldanexus-infra:db_password:
-    secure: v1:43V4i/Y4qkzRnky9:XwzAViU9sSjQlQqCwHUx2udZsUo0Waf/lA==
+    secure: v1:kePfeJ+dFNM8hiZH:02WBH8ene1tMEMyjeNzMGy7I7xCF7DuN1g==
   fuldanexus-infra:key_name: fulda-key-new
