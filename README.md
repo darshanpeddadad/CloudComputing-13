@@ -1,84 +1,96 @@
-# Fulda Nexus Cloud Infrastructure & Deployment (OpenStack + Pulumi)
+# Fulda Nexus — Cloud Infrastructure & Deployment (OpenStack + Pulumi)
 
-Our application runs on a fully automated, secure, multi-tier environment on the **Fulda University OpenStack Cloud** provisioned using **Pulumi Infrastructure as Code (IaC)**.
-
----
-
-## 🌐 Architecture Layout
-
-The infrastructure is designed with security and scalability using the following layout:
-1. **Private Subnet**: Replicates a secure VPC environment (`10.0.1.0/24`) with isolated network routing.
-2. **Nginx & Docker Web Server Host**: Ubuntu VM (`10.0.1.71`) mapped to a Public Floating IP (`10.32.6.178`). Runs frontend (React) and backend (FastAPI) containers. Includes **2GB swap space** allocation to guarantee successful static asset compilation.
-3. **Private MySQL Database Server VM**: Completely isolated from public access. Security groups permit connection **only** from the Web Server VM on port `3306`.
-4. **Swift Object Container**: Stores user-uploaded media files.
+The application runs on a fully automated, secure, multi-tier environment on the **Fulda University OpenStack Cloud**, provisioned using **Pulumi Infrastructure as Code (IaC)**.
 
 ---
 
-## 🚀 Quick-Start Deployment Checklist
+## Architecture
 
-### 1. Configure Local Environment (PowerShell)
-Install Pulumi, select the stack, and export your credentials:
+| Layer | Resource | Details |
+|---|---|---|
+| Network | Private Subnet | `10.0.1.0/24`, isolated with a dedicated router |
+| Compute — Web | Ubuntu VM (Web Server) | Public Floating IP via `ext_net`, runs Docker + Nginx + FastAPI + React |
+| Compute — DB | Ubuntu VM (DB Server) | Private-only, MySQL on port `3306`, accessible only from the web security group |
+| Storage | Swift Object Container | `fulda-assets`, publicly readable for serving media |
+
+Web instances include a **2 GB swap file** to prevent out-of-memory crashes during the React frontend build.
+
+---
+
+## Quick-Start Deployment
+
+The entire provisioning and VM setup is handled by a single PowerShell script.
+
+### 1. Prerequisites
+
+- Pulumi CLI installed (`winget install Pulumi.Pulumi`)
+- Python 3.9+ and `pip`
+- SSH key `fulda-key-new.pem` placed inside the `infra/` directory
+
+### 2. Set Up the Python Virtual Environment
+
 ```powershell
-# Set local state backend
-pulumi login --local
-
-# Set environment authentication for Keystone API
-$env:PULUMI_CONFIG_PASSPHRASE="Fulda2025"
-$env:OS_AUTH_URL="https://private-cloud.informatik.hs-fulda.de:5000/v3"
-$env:OS_USERNAME="CloudComp13"
-$env:OS_PASSWORD="Hulk@3000"
-$env:OS_PROJECT_NAME="CloudComp13"
-$env:OS_USER_DOMAIN_NAME="Default"
-$env:OS_PROJECT_DOMAIN_NAME="Default"
-$env:OS_IDENTITY_API_VERSION="3"
-$env:OS_INSECURE="true"
-
-# Install dependencies inside a virtualenv
 cd infra
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. Configure Stack Keys
+### 3. Initialize the Pulumi Stack (first time only)
+
 ```powershell
-pulumi config set db_username fulda_user
-pulumi config set db_name fulda_app
-pulumi config set --secret db_password "Hulk@3000"
-pulumi config set key_name fulda-key-new
+pulumi login --local
+pulumi stack select dev --create
 ```
 
-### 3. Provision Infrastructure
+### 4. Run the Deployment Script
+
 ```powershell
-pulumi up
+.\deploy.ps1
 ```
+
+This single command:
+1. Loads OpenStack credentials via `setup-env.ps1`
+2. Activates the Python virtual environment
+3. Sets Pulumi secrets and runs `pulumi up --yes`
+4. Waits for VM cloud-init to finish (Docker + git clone)
+5. Writes the `.env` file to the web VM over SSH
+6. Starts Docker Compose (`docker compose up --build -d`)
+7. Polls for MySQL DB connectivity
+8. Runs Alembic migrations and seeds the database
 
 ---
 
-## 🚢 Application Deployment on the Instance
+## Script Actions
 
-1. **SSH into the VM**:
-   ```powershell
-   ssh -i fulda-key-new.pem ubuntu@10.32.6.178
-   ```
-2. **Clone & Setup `.env`**:
-   ```bash
-   git clone https://github.com/darshanpeddadad/CloudComputing-13.git app
-   cd app
-   nano Backend/.env
-   ```
-   *(Note: The database password in `DATABASE_URL` must be URL-encoded, replacing `@` with `%40`, resulting in `mysql+asyncmy://fulda_user:Hulk%403000@10.0.1.123:3306/fulda_app`)*
-3. **Boot Up & Seed Database**:
-   ```bash
-   docker-compose up --build -d
-   docker exec -e PYTHONPATH=/app fastapi-backend alembic upgrade head
-   docker exec -e PYTHONPATH=/app fastapi-backend python scripts/seed_events.py
-   ```
+| Command | Effect |
+|---|---|
+| `.\deploy.ps1` | Full deploy: provision infrastructure + configure VMs |
+| `.\deploy.ps1 -Action vm-setup` | Re-configure VMs only (skips `pulumi up`) |
+| `.\deploy.ps1 -Action destroy` | Tear down all OpenStack resources |
 
 ---
 
-## 🌐 Verified Live Endpoints
-Once deployed, the app is reachable on the university intranet/VPN at:
-* **Frontend Portal**: [http://10.32.6.178](http://10.32.6.178)
-* **Backend Docs (Swagger)**: [http://10.32.6.178/api/docs](http://10.32.6.178/api/docs)
-* **Health Endpoint**: [http://10.32.6.178/api/health](http://10.32.6.178/api/health)
+## Stack Outputs
+
+After a successful deploy, Pulumi exports:
+
+| Output | Description |
+|---|---|
+| `Web_Primary_Public_IP` | Public floating IP of the primary web server |
+| `DB_Private_IP` | Private IP of the MySQL VM |
+| `Web_Private_IPs` | Private IPs of all web instances |
+| `Swift_Container_Name` | Name of the Swift object storage container |
+| `Network_ID` / `Subnet_ID` / `Router_ID` | Network resource IDs |
+
+---
+
+## Live Endpoints
+
+Once deployed, the app is reachable on the university intranet/VPN:
+
+| Endpoint | URL |
+|---|---|
+| Frontend Portal | `http://<Web_Primary_Public_IP>` |
+| Backend Swagger Docs | `http://<Web_Primary_Public_IP>/api/docs` |
+| Health Check | `http://<Web_Primary_Public_IP>/api/health` |
