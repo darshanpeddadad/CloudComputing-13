@@ -1,3 +1,5 @@
+**CloudComp 13 : Peddada Ramachandra Sai Darshan (1568613) & Vedika Teja Srivatsa (1644634)** 
+
 # Fulda Nexus — Cloud Infrastructure & Deployment (OpenStack + Pulumi)
 
 The application runs on a fully automated, secure, multi-tier environment on the **Fulda University OpenStack Cloud**, provisioned using **Pulumi Infrastructure as Code (IaC)**.
